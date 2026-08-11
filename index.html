@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>皮克敏活動任務動態排程器</title>
+    <style>
+        :root {
+            --primary: #4a7c59;
+            --accent: #ff6b6b;
+            --bg: #f7f9f6;
+            --card: #ffffff;
+            --mushroom: #e07a5f;
+            --danger: #d9534f;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        h1 { text-align: center; color: var(--primary); margin-bottom: 4px; }
+        .subtitle { text-align: center; font-size: 0.9rem; color: #666; margin-bottom: 16px; }
+
+        .action-bar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 16px;
+        }
+
+        .reset-all-btn {
+            background-color: #ffffff;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .reset-all-btn:hover {
+            background-color: var(--danger);
+            color: #ffffff;
+        }
+
+        .day-card {
+            background-color: var(--card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 6px solid var(--primary);
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .day-title { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
+        
+        .mushroom-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .mushroom-control input {
+            width: 45px;
+            padding: 2px 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .task-list { list-style: none; padding: 0; margin: 10px 0 0 0; }
+
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .task-item input[type="checkbox"] {
+            margin-top: 3px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .task-stage {
+            font-weight: bold;
+            color: #2b580c;
+            background: #e8f5e9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .mushroom-req { color: var(--mushroom); font-weight: bold; }
+        .completed { opacity: 0.4; text-decoration: line-through; }
+    </style>
+</head>
+<body>
+
+    <h1>🍄 皮克敏活動動態排程器</h1>
+    <div class="subtitle">支援「課金/吃券」額外打蘑菇，自動滾動修正後續日程</div>
+
+    <div class="action-bar">
+        <button class="reset-all-btn" onclick="resetAllData()">🔄 一鍵清空 / 重新開始</button>
+    </div>
+
+    <div id="calendar"></div>
+
+    <script>
+        // 任務結構 (Stage 1-1 ~ Stage 4-4)
+        const baseStages = [
+            { stage: "1-1", desc: "走 1000 步", m: 0 },
+            { stage: "1-2", desc: "培育 2 隻皮克敏", m: 0 },
+            { stage: "1-3", desc: "完成 2 個探險", m: 0 },
+            { stage: "1-4", desc: "種 1000 朵花 + 推毀 2 棵蘑菇", m: 2 },
+            { stage: "2-1", desc: "走 2000 步", m: 0 },
+            { stage: "2-2", desc: "種 1000 朵花 + 推毀 2 棵蘑菇", m: 2 },
+            { stage: "2-3", desc: "培育 3 隻皮克敏 + 推毀 3 棵蘑菇", m: 3 },
+            { stage: "2-4", desc: "種 500 朵美人蕉 + 推毀 4 棵蘑菇", m: 4 },
+            { stage: "3-1", desc: "走 2000 步 + 完成 2 個探險", m: 0 },
+            { stage: "3-2", desc: "種 1500 朵白色扶桑花 + 推毀 3 棵蘑菇", m: 3 },
+            { stage: "3-3", desc: "種 1500 朵黃色扶桑花 + 推毀 4 棵蘑菇", m: 4 },
+            { stage: "3-4", desc: "種 1500 朵紅色扶桑花 + 種 2000 朵黃色美人蕉 + 推毀 5 棵蘑菇", m: 5 },
+            { stage: "4-1", desc: "完成 3 個探險 + 推毀 3 棵蘑菇", m: 3 },
+            { stage: "4-2", desc: "種 2000 朵白色美人蕉 + 推毀 4 棵蘑菇", m: 4 },
+            { stage: "4-3", desc: "種 2000 朵黃色美人蕉 + 種 1000 朵藍色扶桑花 + 推毀 4 棵蘑菇", m: 4 },
+            { stage: "4-4", desc: "種 2000 朵紅色美人蕉 + 種 2500 朵扶桑花 + 推毀 5 棵蘑菇", m: 5 }
+        ];
+
+        // 取得儲存的額外蘑菇數據
+        function getExtraMushrooms() {
+            return JSON.parse(localStorage.getItem('pikmin_extra_mushrooms')) || {};
+        }
+
+        // 儲存額外蘑菇數據
+        function setExtraMushroom(day, count) {
+            const extra = getExtraMushrooms();
+            extra[day] = parseInt(count) || 0;
+            localStorage.setItem('pikmin_extra_mushrooms', JSON.stringify(extra));
+            render();
+        }
+
+        // 動態推算 8/1 ~ 8/31 排程
+        function calculateSchedule() {
+            const extraData = getExtraMushrooms();
+            let schedule = [];
+            let currentStageIdx = 0;
+            let currentMushroomsNeeded = baseStages[0].m;
+            let round = 1;
+
+            for (let day = 1; day <= 31; day++) {
+                let extra = extraData[day] || 0;
+                let totalDailyMushrooms = 3 + extra;
+                let mushroomsLeft = totalDailyMushrooms;
+                let dayTasks = [];
+
+                while (mushroomsLeft >= 0 && currentStageIdx < baseStages.length) {
+                    let task = baseStages[currentStageIdx];
+                    let req = currentMushroomsNeeded;
+
+                    if (req === 0) {
+                        dayTasks.push({ label: `[第${round}輪 Stage ${task.stage}]`, desc: task.desc });
+                        currentStageIdx++;
+                        if (currentStageIdx < baseStages.length) {
+                            currentMushroomsNeeded = baseStages[currentStageIdx].m;
+                        }
+                    } else if (mushroomsLeft >= req) {
+                        mushroomsLeft -= req;
+                        dayTasks.push({ label: `[第${round}輪 Stage ${task.stage}]`, desc: task.desc });
+                        currentStageIdx++;
+                        if (currentStageIdx < baseStages.length) {
+                            currentMushroomsNeeded = baseStages[currentStageIdx].m;
+                        } else {
+                            currentStageIdx = 0;
+                            currentMushroomsNeeded = baseStages[0].m;
+                            round++;
+                        }
+                    } else {
+                        dayTasks.push({ 
+                            label: `[第${round}輪 Stage ${task.stage}]`, 
+                            desc: `${task.desc} <span class="mushroom-req">(今日擊破 ${mushroomsLeft} 顆，還差 ${req - mushroomsLeft} 顆)</span>` 
+                        });
+                        currentMushroomsNeeded -= mushroomsLeft;
+                        mushroomsLeft = 0;
+                        break;
+                    }
+                }
+
+                schedule.push({
+                    day: day,
+                    date: `8 月 ${day} 日`,
+                    tasks: dayTasks,
+                    totalMushroomsAvailable: totalDailyMushrooms,
+                    extraMushrooms: extra
+                });
+            }
+            return schedule;
+        }
+
+        function render() {
+            const schedule = calculateSchedule();
+            const container = document.getElementById('calendar');
+            container.innerHTML = '';
+            const savedCheckState = JSON.parse(localStorage.getItem('pikmin_check_state')) || {};
+
+            schedule.forEach((dayData) => {
+                const card = document.createElement('div');
+                card.className = 'day-card';
+
+                let tasksHTML = dayData.tasks.map((t, taskIdx) => {
+                    const key = `d${dayData.day}_t${taskIdx}`;
+                    const isChecked = savedCheckState[key] ? 'checked' : '';
+                    const completedClass = savedCheckState[key] ? 'completed' : '';
+
+                    return `
+                        <li class="task-item ${completedClass}">
+                            <input type="checkbox" id="${key}" ${isChecked} onchange="toggleCheck('${key}')">
+                            <label for="${key}">
+                                <span class="task-stage">${t.label}</span> ${t.desc}
+                            </label>
+                        </li>
+                    `;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="day-header">
+                        <span class="day-title">📅 ${dayData.date}</span>
+                        <div class="mushroom-control">
+                            <span>🍄 今日額外:</span>
+                            <input type="number" min="0" value="${dayData.extraMushrooms}" 
+                                   onchange="setExtraMushroom(${dayData.day}, this.value)"> 顆
+                        </div>
+                    </div>
+                    <ul class="task-list">
+                        ${tasksHTML || '<li>本日休息 / 繼續下一輪</li>'}
+                    </ul>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleCheck(key) {
+            const savedCheckState = JSON.parse(localStorage.getItem('pikmin_check_state')) || {};
+            savedCheckState[key] = !savedCheckState[key];
+            localStorage.setItem('pikmin_check_state', JSON.stringify(savedCheckState));
+            render();
+        }
+
+        // 重置所有資料（打勾 + 額外蘑菇）
+        function resetAllData() {
+            if (confirm("確定要重置所有完成紀錄與額外蘑菇設定嗎？")) {
+                localStorage.removeItem('pikmin_check_state');
+                localStorage.removeItem('pikmin_extra_mushrooms');
+                render();
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>
