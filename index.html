@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>皮克敏活動任務動態排程器</title>
+    <title>皮克敏活動任務完整排程器</title>
     <style>
         :root {
             --primary: #4a7c59;
@@ -81,7 +81,7 @@
         }
 
         .day-card.past-day:hover {
-            opacity: 0.9;
+            opacity: 0.95;
             filter: grayscale(0%);
         }
 
@@ -206,8 +206,8 @@
 </head>
 <body>
 
-    <h1>🍄 皮克敏活動動態排程器</h1>
-    <div class="subtitle">自動追蹤今日日期 & 動態卡關順延排程</div>
+    <h1>🍄 皮克敏活動任務完整排程器</h1>
+    <div class="subtitle">全月任務預覽 & 自動追蹤今日進度</div>
 
     <div class="action-bar">
         <button class="today-jump-btn" onclick="scrollToToday()">📍 跳至今天</button>
@@ -250,20 +250,9 @@
             render();
         }
 
-        function isSubTaskCompleted(round, stage, subIdx) {
-            const savedCheckState = JSON.parse(localStorage.getItem('pikmin_check_state')) || {};
-            return !!savedCheckState[`r${round}_s${stage}_sub${subIdx}`];
-        }
-
-        function isMushroomCompleted(round, stage, day) {
-            const savedCheckState = JSON.parse(localStorage.getItem('pikmin_check_state')) || {};
-            return !!savedCheckState[`r${round}_s${stage}_mCheck_d${day}`];
-        }
-
-        function calculateDynamicSchedule() {
+        // 計算固定全月標準排程
+        function calculateStaticSchedule() {
             const extraData = getExtraMushrooms();
-            const savedCheckState = JSON.parse(localStorage.getItem('pikmin_check_state')) || {};
-            
             let schedule = [];
             let currentStageIdx = 0;
             let currentMushroomsNeeded = baseStages[0].m;
@@ -271,18 +260,12 @@
 
             for (let day = 1; day <= 31; day++) {
                 let extra = extraData[day] || 0;
-                let totalDailyMushrooms = 3 + extra;
-                let mushroomsLeft = totalDailyMushrooms;
+                let mushroomsLeft = 3 + extra;
                 let dayTasks = [];
 
                 while (mushroomsLeft >= 0 && currentStageIdx < baseStages.length) {
                     let stageData = baseStages[currentStageIdx];
                     let req = currentMushroomsNeeded;
-                    let stageKey = `r${round}_s${stageData.stage}`;
-
-                    let allSubTasksDone = stageData.subTasks.every((_, sIdx) => {
-                        return savedCheckState[`${stageKey}_sub${sIdx}`];
-                    });
 
                     if (req === 0) {
                         dayTasks.push({ 
@@ -292,14 +275,9 @@
                             mCount: 0,
                             mTotal: stageData.m
                         });
-
-                        if (allSubTasksDone) {
-                            currentStageIdx++;
-                            if (currentStageIdx < baseStages.length) {
-                                currentMushroomsNeeded = baseStages[currentStageIdx].m;
-                            }
-                        } else {
-                            break;
+                        currentStageIdx++;
+                        if (currentStageIdx < baseStages.length) {
+                            currentMushroomsNeeded = baseStages[currentStageIdx].m;
                         }
                     } else if (mushroomsLeft >= req) {
                         dayTasks.push({ 
@@ -309,21 +287,14 @@
                             mCount: req,
                             mTotal: stageData.m
                         });
-
-                        let mDone = savedCheckState[`${stageKey}_mCheck_d${day}`];
-                        if (allSubTasksDone && mDone) {
-                            mushroomsLeft -= req;
-                            currentStageIdx++;
-                            if (currentStageIdx < baseStages.length) {
-                                currentMushroomsNeeded = baseStages[currentStageIdx].m;
-                            } else {
-                                currentStageIdx = 0;
-                                currentMushroomsNeeded = baseStages[0].m;
-                                round++;
-                            }
+                        mushroomsLeft -= req;
+                        currentStageIdx++;
+                        if (currentStageIdx < baseStages.length) {
+                            currentMushroomsNeeded = baseStages[currentStageIdx].m;
                         } else {
-                            mushroomsLeft = 0;
-                            break;
+                            currentStageIdx = 0;
+                            currentMushroomsNeeded = baseStages[0].m;
+                            round++;
                         }
                     } else {
                         dayTasks.push({ 
@@ -333,11 +304,7 @@
                             mCount: mushroomsLeft,
                             mTotal: stageData.m
                         });
-                        
-                        let mDone = savedCheckState[`${stageKey}_mCheck_d${day}`];
-                        if (allSubTasksDone && mDone) {
-                            currentMushroomsNeeded -= mushroomsLeft;
-                        }
+                        currentMushroomsNeeded -= mushroomsLeft;
                         mushroomsLeft = 0;
                         break;
                     }
@@ -354,7 +321,7 @@
         }
 
         function render() {
-            const schedule = calculateDynamicSchedule();
+            const schedule = calculateStaticSchedule();
             const container = document.getElementById('calendar');
             container.innerHTML = '';
             
@@ -376,7 +343,7 @@
                 if (isToday) {
                     card.classList.add('is-today');
                 } else if (isPast) {
-                    card.classList.add('past-day'); // 過去日期加上刷淡樣式
+                    card.classList.add('past-day');
                 }
 
                 let isDayFullyCompleted = true;
